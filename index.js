@@ -1,61 +1,61 @@
-const express = require('express');
-const cors = require('cors');
-const { Pool } = require('pg');
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
+import express from 'express';
+import cors from 'cors';
+import { createClient } from '@supabase/supabase-js';
 
 const app = express();
+const port = process.env.PORT || 3000;
+
+// Initialiser Supabase
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Middlewares
 app.use(cors());
 app.use(express.json());
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
-const JWT_SECRET = process.env.JWT_SECRET || "BiddeSecret2025";
-
-// Test route
+// Route test
 app.get('/', (req, res) => {
-  res.send('Bidde backend is running!');
+  res.send('Bidde backend is running with Supabase!');
 });
 
-// User registration
+// Inscription
 app.post('/register', async (req, res) => {
   const { email, phone, password } = req.body;
+
   try {
-    const result = await pool.query(
-      'INSERT INTO users (email, phone, password) VALUES ($1, $2, $3) RETURNING *',
-      [email, phone, password]
-    );
-    res.json(result.rows[0]);
+    const { data, error } = await supabase
+      .from('users')
+      .insert([{ email, phone, password }]);
+
+    if (error) throw error;
+
+    res.status(201).json(data);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Erreur lors de l’inscription' });
+    res.status(400).json({ error: err.message });
   }
 });
 
-// User login
+// Connexion
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
+
   try {
-    const result = await pool.query(
-      'SELECT * FROM users WHERE email = $1 AND password = $2',
-      [email, password]
-    );
-    const user = result.rows[0];
-    if (!user) {
-      return res.status(401).json({ error: 'Identifiants invalides' });
-    }
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1d' });
-    res.json({ token });
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .eq('password', password)
+      .single();
+
+    if (error) throw error;
+
+    res.json(data);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Erreur de connexion' });
+    res.status(400).json({ error: err.message });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Serveur démarré sur le port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
